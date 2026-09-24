@@ -26,3 +26,6 @@ broadcast/*/31337/
 
 # OS / editor
 .DS_Store
+
+# Private working context, never commit
+CLAUDE.local.md
