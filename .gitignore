@@ -1,0 +1,28 @@
+# Environment files (keep secrets out of git)
+.env
+.env.*
+!.env.example
+
+# Private keys and keystores
+*.pem
+*.key
+*.p12
+*.keystore
+keystore/
+keystores/
+private-key*
+*private_key*
+*.secret
+
+# Node
+node_modules/
+
+# Foundry build output
+out/
+cache/
+contracts/out/
+contracts/cache/
+broadcast/*/31337/
+
+# OS / editor
+.DS_Store
