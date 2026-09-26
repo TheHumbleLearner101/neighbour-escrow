@@ -1,0 +1,94 @@
+@import "tailwindcss";
+
+/*
+  Hearth theme. Palette locked from Joel's reference images (26 Sep):
+  Cotton off-white ground, Cherry/Maroon red as the brand, Whiskey-Sour amber
+  as the glow, Noir warm-black ink. Warmth lives in the red + amber, NOT in a
+  saturated cream body: Cotton's chroma is pulled down so it reads as a warm
+  off-white, not the AI-cream tell.
+*/
+
+@theme {
+  /* Fonts (wired in layout.tsx via next/font) */
+  --font-display: var(--font-display); /* Rubik: bold geometric, the Hearth voice */
+  --font-sans: var(--font-body); /* Instrument Sans: quiet humanist body, contrast axis */
+
+  /* Ground + ink */
+  --color-cotton: oklch(0.938 0.009 100); /* warm off-white body (chroma pulled from 0.0187) */
+  --color-cotton-deep: oklch(0.905 0.012 95); /* card / raised surface */
+  --color-ink: oklch(0.209 0.006 18); /* Noir warm near-black, body text */
+  --color-ink-soft: oklch(0.44 0.02 30); /* secondary text, still >=4.5:1 on cotton */
+
+  /* Brand red (the hearth's door / wax seal) */
+  --color-ember: oklch(0.379 0.155 29.4); /* Cherry #810100 */
+  --color-ember-deep: oklch(0.314 0.129 29.2); /* Maroon #630000 */
+  --color-ember-bright: oklch(0.52 0.19 30); /* lifted red for interactive/hover */
+
+  /* Amber glow (the fire, hero-moment pop) */
+  --color-glow: oklch(0.724 0.108 67); /* Whiskey Sour #D39858 */
+  --color-glow-bright: oklch(0.78 0.16 62); /* flame-orange, "goal reached / paid" burst */
+
+  /* Semantic money states */
+  --color-raising: var(--color-glow); /* amber: gathering */
+  --color-booked: var(--color-ember); /* red: locked, on */
+  --color-paid: oklch(0.58 0.13 145); /* warm green, settled */
+  --color-refunded: var(--color-ink-soft); /* neutral, closed */
+
+  --color-line: oklch(0.87 0.012 95); /* hairline borders */
+  --color-line-strong: oklch(0.80 0.015 90);
+
+  /* Radii: impeccable rule — cards 12-16px, never 24+ */
+  --radius-card: 14px;
+  --radius-field: 10px;
+
+  /* z-scale */
+  --z-nav: 20;
+  --z-sticky: 30;
+  --z-backdrop: 40;
+  --z-modal: 50;
+  --z-toast: 60;
+}
+
+:root {
+  color-scheme: light;
+}
+
+* {
+  border-color: var(--color-line);
+}
+
+html {
+  background: var(--color-cotton);
+}
+
+body {
+  background: var(--color-cotton);
+  color: var(--color-ink);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Display type: the Hearth voice. Tight but not cramped (impeccable floor -0.04em). */
+.font-display {
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+h1, h2, h3 {
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
