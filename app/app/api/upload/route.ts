@@ -13,9 +13,11 @@ export const runtime = "nodejs";
 const MAX_BYTES = 4 * 1024 * 1024;
 
 export async function POST(req: NextRequest) {
-  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+  // Vercel connects a Blob store either with BLOB_STORE_ID (newer stores, signed in
+  // automatically on Vercel) or with BLOB_READ_WRITE_TOKEN (older stores, and local dev).
+  if (!process.env.BLOB_STORE_ID && !process.env.BLOB_READ_WRITE_TOKEN) {
     return NextResponse.json(
-      { error: "Photo upload isn't set up yet (BLOB_READ_WRITE_TOKEN missing)." },
+      { error: "Photo upload isn't set up yet (no Blob store connected)." },
       { status: 503 },
     );
   }

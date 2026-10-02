@@ -23,4 +23,4 @@ pnpm dev
 
 ## Deploying on Vercel
 
-Import the repo with **Root Directory** set to `app`, add the variables from `.env.example`, and connect a Blob store to the project (this sets `BLOB_READ_WRITE_TOKEN`).
+Import the repo with **Root Directory** set to `app`, add the variables from `.env.example`, and connect a Blob store to the project (this sets `BLOB_STORE_ID`).
