@@ -9,11 +9,14 @@ import { MoneyStatePill } from "@/components/MoneyState";
 import { ChipInPanel } from "@/components/ChipInPanel";
 import {
   getCampaign,
+  getCampaignHistory,
   formatUsdc,
   toUsdc,
   Status,
   EXPLORER,
+  CAMPAIGNS_ADDRESS,
   type Campaign,
+  type CampaignHistory,
 } from "@/lib/campaigns";
 
 export default function CampaignPage({
@@ -29,14 +32,23 @@ export default function CampaignPage({
     undefined,
   );
 
+  const [history, setHistory] = useState<CampaignHistory | null>(null);
+
   const load = useCallback(async () => {
     const c = await getCampaign(numId);
     setCampaign(c);
+    // History comes from the explorer's index, which can lag the chain by a few seconds.
+    getCampaignHistory(numId).then(setHistory);
   }, [numId]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    let live = true;
+    getCampaign(numId).then((c) => live && setCampaign(c));
+    getCampaignHistory(numId).then((h) => live && setHistory(h));
+    return () => {
+      live = false;
+    };
+  }, [numId]);
 
   if (campaign === undefined) {
     return (
@@ -147,11 +159,33 @@ export default function CampaignPage({
         {/* Actions, state + role aware */}
         <ChipInPanel
           campaign={campaign}
+          history={history}
           isCreator={isCreator}
           isPayee={isPayee}
           loggedIn={authStatus === "logged-in"}
           onDone={load}
         />
+
+        {/* Who's in */}
+        {history && history.backers.length > 0 && (
+          <div className="mt-6">
+            <h2 className="mb-2 text-sm font-medium">
+              {history.backers.length}{" "}
+              {history.backers.length === 1 ? "neighbour has" : "neighbours have"}{" "}
+              chipped in
+            </h2>
+            <ul className="space-y-1 text-sm text-[color:var(--color-ink-soft)]">
+              {history.backers.map((b, i) => (
+                <li key={b.address} className="flex justify-between">
+                  <span>
+                    {b.address.toLowerCase() === me ? "You" : `Neighbour ${i + 1}`}
+                  </span>
+                  <span>${formatUsdc(b.amount)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* Details / explorer, tucked away for the curious */}
         <details className="mt-6 text-sm text-[color:var(--color-ink-soft)]">
@@ -161,14 +195,36 @@ export default function CampaignPage({
             {toUsdc(raw.retainedFees) > 0 && (
               <p>Pull-out fees in the pot: {formatUsdc(raw.retainedFees)} USDC</p>
             )}
+            <p>Campaign number {campaign.id} in the Hearth contract</p>
             <a
-              href={`${EXPLORER}/address/${raw.creator}`}
+              href={`${EXPLORER}/address/${CAMPAIGNS_ADDRESS}`}
               target="_blank"
               rel="noreferrer"
               className="block underline"
             >
-              View the campaign on the explorer
+              View the contract on the explorer
             </a>
+            {history?.paidTx && (
+              <a
+                href={`${EXPLORER}/tx/${history.paidTx}`}
+                target="_blank"
+                rel="noreferrer"
+                className="block underline"
+              >
+                Payment to the provider
+              </a>
+            )}
+            {history?.refunds.map((r) => (
+              <a
+                key={r.tx}
+                href={`${EXPLORER}/tx/${r.tx}`}
+                target="_blank"
+                rel="noreferrer"
+                className="block underline"
+              >
+                Refund of ${formatUsdc(r.amount)}
+              </a>
+            ))}
           </div>
         </details>
       </div>
