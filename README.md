@@ -64,7 +64,7 @@ pnpm dev
 
 ## Credits
 
-The wallet setup (the Crossmint provider configuration and email-login flow) is adapted from Crossmint's [stablecoin wallet quickstart](https://github.com/Crossmint/stablecoin-wallet-quickstart). The campaign contract, the tests and every Hearth screen were built for this project.
+The wallet setup (the Crossmint provider configuration and email-login flow, about 12 lines in `app/app/providers.tsx`) is adapted from Crossmint's [stablecoin wallet quickstart](https://github.com/Crossmint/stablecoin-wallet-quickstart). The quickstart does not publish a licence; only that provider setup, which follows Crossmint's SDK documentation, was taken from it. The campaign contract, the tests and every Hearth screen were built for this project.
 
 ## Licence
 
