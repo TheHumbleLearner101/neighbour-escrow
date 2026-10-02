@@ -310,6 +310,19 @@ export function fromUsdc(amount: number): bigint {
   return BigInt(Math.round(amount * 10 ** USDC_DECIMALS));
 }
 
+/** Keep only what a money box should hold: digits and one decimal point, max 2 decimals. */
+export function cleanMoneyInput(raw: string): string {
+  const digits = raw.replace(/[^0-9.]/g, "");
+  const [whole, ...rest] = digits.split(".");
+  return rest.length ? `${whole}.${rest.join("").slice(0, 2)}` : whole;
+}
+
+/** The typed amount as a number, or null if it isn't a usable amount above zero. */
+export function parseMoney(raw: string): number | null {
+  const n = Number(raw);
+  return raw.trim() !== "" && Number.isFinite(n) && n > 0 ? n : null;
+}
+
 export function formatUsdc(units: bigint): string {
   const n = toUsdc(units);
   return n.toLocaleString(undefined, {

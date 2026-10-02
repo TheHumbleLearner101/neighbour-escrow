@@ -10,6 +10,8 @@ import {
   toUsdc,
   publicClient,
   refundCallDue,
+  cleanMoneyInput,
+  parseMoney,
   CAMPAIGNS_ADDRESS,
   CAMPAIGNS_ABI,
   type Campaign,
@@ -39,7 +41,8 @@ export function ChipInPanel({
   const actions = useCampaignActions();
   const { raw } = campaign;
   const remaining = Math.max(0, toUsdc(raw.goal) - toUsdc(raw.raised));
-  const [amount, setAmount] = useState(Math.min(10, remaining || 10));
+  const [amount, setAmount] = useState("");
+  const chipAmount = parseMoney(amount);
   const [myContribution, setMyContribution] = useState<number>(0);
   const [myRefundClaimed, setMyRefundClaimed] = useState(false);
 
@@ -218,26 +221,27 @@ export function ChipInPanel({
           {PRESETS.map((p) => (
             <button
               key={p}
-              onClick={() => setAmount(p)}
+              onClick={() => setAmount(String(p))}
               className="flex-1 rounded-[10px] border py-2 text-sm font-semibold transition-colors"
               style={{
                 borderColor:
-                  amount === p ? "var(--color-ember)" : "var(--color-line)",
+                  amount === String(p) ? "var(--color-ember)" : "var(--color-line)",
                 background:
-                  amount === p
+                  amount === String(p)
                     ? "oklch(0.379 0.155 29.4 / 0.08)"
                     : "transparent",
-                color: amount === p ? "var(--color-ember)" : "var(--color-ink)",
+                color: amount === String(p) ? "var(--color-ember)" : "var(--color-ink)",
               }}
             >
               ${p}
             </button>
           ))}
           <input
-            type="number"
-            min={1}
+            type="text"
+            inputMode="decimal"
             value={amount}
-            onChange={(e) => setAmount(Math.max(1, Number(e.target.value)))}
+            onChange={(e) => setAmount(cleanMoneyInput(e.target.value))}
+            placeholder="Other"
             className="w-20 rounded-[10px] border px-3 py-2 text-sm"
             style={{ borderColor: "var(--color-line)" }}
             aria-label="Custom amount"
@@ -245,15 +249,19 @@ export function ChipInPanel({
         </div>
 
         <button
-          disabled={busy || remaining <= 0}
-          onClick={() => handle(() => actions.chipIn(campaign.id, amount))}
+          disabled={busy || remaining <= 0 || !chipAmount}
+          onClick={() =>
+            chipAmount && handle(() => actions.chipIn(campaign.id, chipAmount))
+          }
           className="btn-primary mt-3 w-full"
         >
           {busy
             ? actions.state === "confirming"
               ? "Chipping in…"
               : "Confirm in your wallet…"
-            : `Chip in $${amount}`}
+            : chipAmount
+              ? `Chip in $${amount}`
+              : "Pick an amount"}
         </button>
 
         {myContribution > 0 && (

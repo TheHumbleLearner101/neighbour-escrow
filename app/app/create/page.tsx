@@ -5,7 +5,12 @@ import { useRouter } from "next/navigation";
 import { useCrossmintAuth, useWallet } from "@crossmint/client-sdk-react-ui";
 import { Header } from "@/components/Header";
 import { useCampaignActions } from "@/lib/useCampaignActions";
-import { getCampaignCount, type CampaignType } from "@/lib/campaigns";
+import {
+  getCampaignCount,
+  cleanMoneyInput,
+  parseMoney,
+  type CampaignType,
+} from "@/lib/campaigns";
 import { isAddress } from "viem";
 import { uploadPhoto } from "@/lib/uploadPhoto";
 
@@ -38,7 +43,7 @@ export default function CreatePage() {
   const [type, setType] = useState<CampaignType>("event");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [goal, setGoal] = useState(150);
+  const [goal, setGoal] = useState("");
   const [timing, setTiming] = useState(1); // 1 day by default
   const [payee, setPayee] = useState("");
   const [image, setImage] = useState<string | null>(null);
@@ -66,8 +71,9 @@ export default function CreatePage() {
     if (!payee.trim() || !isAddress(payee))
       return setFormError("Paste the provider's Hearth ID.");
     if (wallet && payee.toLowerCase() === wallet.address.toLowerCase())
-      return setFormError("The provider can't be you.");
-    if (goal <= 0) return setFormError("Set a goal above zero.");
+      return setFormError("That's your own ID. The person getting paid has to be someone else, because you're the one who approves the job.");
+    const goalAmount = parseMoney(goal);
+    if (!goalAmount) return setFormError("Set a goal, for example 150.");
 
     // Pack metadata into a data URI (tiny; no hosting needed).
     const meta = { title: title.trim(), description: description.trim(), type, image: image ?? undefined };
@@ -80,7 +86,7 @@ export default function CreatePage() {
       const nextId = await getCampaignCount(); // the id this new campaign will get
       await actions.createCampaign({
         metadataURI,
-        goal,
+        goal: goalAmount,
         fundingDeadline: now + TIMINGS[timing].funding,
         completionDeadline: now + TIMINGS[timing].funding + TIMINGS[timing].job,
         reviewWindow: TIMINGS[timing].review,
@@ -157,12 +163,13 @@ export default function CreatePage() {
               />
             </Field>
 
-            <Field label="Goal (USDC)">
+            <Field label="Goal ($)">
               <input
-                type="number"
-                min={1}
+                type="text"
+                inputMode="decimal"
                 value={goal}
-                onChange={(e) => setGoal(Number(e.target.value))}
+                onChange={(e) => setGoal(cleanMoneyInput(e.target.value))}
+                placeholder="150"
                 className="input"
               />
             </Field>
@@ -193,7 +200,7 @@ export default function CreatePage() {
               </div>
             </div>
 
-            <Field label="Who's doing it? (paste their Hearth ID: they tap Copy my ID)">
+            <Field label="Who's getting paid? (not you: paste the provider's Hearth ID, from their Copy my ID button)">
               <input
                 value={payee}
                 onChange={(e) => setPayee(e.target.value)}

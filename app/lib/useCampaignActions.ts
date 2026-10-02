@@ -13,6 +13,17 @@ import {
 
 type ActionState = "idle" | "signing" | "confirming" | "done" | "error";
 
+/** Wallet errors are written for developers. Say what the neighbour should do instead. */
+function friendlyError(e: unknown): string {
+  const raw = e instanceof Error ? e.message : "";
+  if (/not onboarded/i.test(raw))
+    return "First time paying from this device. Tap again, and enter the code we email you if asked.";
+  if (/rejected|denied|cancel/i.test(raw)) return "Cancelled. Nothing was sent.";
+  if (/insufficient|exceeds balance/i.test(raw))
+    return "Not enough money in your account for that.";
+  return raw || "Something went wrong. Try again.";
+}
+
 /**
  * Wallet writes for a campaign, signed by the user's OWN email wallet (client-side).
  * The Crossmint SDK renders the OTP prompt during signing (showOtpSignerPrompt default true).
@@ -39,8 +50,7 @@ export function useCampaignActions() {
         setState("done");
         return hash;
       } catch (e) {
-        const msg =
-          e instanceof Error ? e.message : "Something went wrong. Try again.";
+        const msg = friendlyError(e);
         setError(msg);
         setState("error");
         throw e;
