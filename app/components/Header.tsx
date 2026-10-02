@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useCrossmintAuth, useWallet } from "@crossmint/client-sdk-react-ui";
 import { Logo } from "./Flame";
@@ -15,6 +16,15 @@ export function Header() {
   const { login, logout, status, user } = useCrossmintAuth();
   const { wallet } = useWallet();
   const loggedIn = status === "logged-in";
+  const [copied, setCopied] = useState(false);
+
+  // A provider shares this with the organiser, who pastes it into "Who's doing it?".
+  async function copyId() {
+    if (!wallet?.address) return;
+    await navigator.clipboard.writeText(wallet.address);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
 
   return (
     <header
@@ -34,6 +44,16 @@ export function Header() {
             <span className="hidden text-sm text-[color:var(--color-ink-soft)] sm:inline">
               {shortName(wallet?.address, user?.email)}
             </span>
+            {wallet?.address && (
+              <button
+                onClick={copyId}
+                className="rounded-full border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-[color:var(--color-cotton-deep)]"
+                style={{ borderColor: "var(--color-line-strong)" }}
+                title="Your Hearth ID, so an organiser can pay you"
+              >
+                {copied ? "Copied" : "Copy my ID"}
+              </button>
+            )}
             <button
               onClick={logout}
               className="rounded-full border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-[color:var(--color-cotton-deep)]"
