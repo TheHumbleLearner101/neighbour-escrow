@@ -112,6 +112,7 @@ Campaign text, images and proof photos live off-chain. The contract stores only 
 - Proof-of-attendance keepsakes for event backers
 - Volunteer-hour pledges alongside money
 - Platform fee on business payouts; verified provider listings
+- Local provider directory with featured listings (Joel, 2 Oct): providers show what they offer, their deals and the areas they cover, so neighbours get ideas for campaigns. Organisers then pick the provider from the list instead of pasting an ID, and featured spots are a revenue line and a way for Hearth to spread through each provider's customers
 - One-person-one-vote and protection against fake wallets
 - Lending with refundable deposits
 - Projects on public land (potholes) may need local council approval; check before promoting them
