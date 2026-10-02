@@ -6,7 +6,11 @@ Built for the Colosseum Crypto World's Fair hackathon, Base track. Testnet only 
 
 ## Why this exists
 
-*Placeholder: Joel writes this section.*
+We used to know our neighbours. You could knock next door and borrow a ladder, kids played out front, and if you needed a hand, someone on the road could help. Most of that is gone. Big companies decide what we eat and what it costs, while the tomatoes growing two doors down go to waste. And as AI and rising costs squeeze ordinary people, now's the time to lean on each other again.
+
+Hearth is a way back to that. Someone on the street starts a campaign: a street party, a bouncy castle for the kids, a pothole that needs fixing. Neighbours chip in, the money waits in a smart contract, and a local business or neighbour gets paid once the organiser confirms the job is done. If it doesn't happen, everyone gets their money back.
+
+It matters most where trust is lowest. Say you've just arrived in a new country. You don't know anyone, and you might not have a local bank account yet. With Hearth, you can chip in to your street's party the week you arrive, and nobody has to trust anybody. The money waits in the contract until the job is done. No bank account needed, no middleman holding it. Just neighbours.
 
 ## How it works
 

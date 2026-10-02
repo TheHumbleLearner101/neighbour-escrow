@@ -4,13 +4,13 @@ Read this first. It explains why the project exists, who it's for, and what it's
 
 ## Why this exists
 
-*Joel owns this text. Do not rewrite it. It becomes the top of the README once Joel finalises it.*
+*Joel owns this text. Do not rewrite it. Finalised 2 Oct 2026 and copied to the top of the README.*
 
 We used to know our neighbours. You could knock next door and borrow a ladder, kids played out front, and if you needed a hand, someone on the road could help. Most of that is gone. Big companies decide what we eat and what it costs, while the tomatoes growing two doors down go to waste. And as AI and rising costs squeeze ordinary people, now's the time to lean on each other again.
 
-[Name] is a way back to that. Someone on the street starts a campaign: a street party, a bouncy castle for the kids, a pothole that needs fixing. Neighbours chip in, the money waits in a smart contract, and a local business or neighbour gets paid once the street agrees the job is done. If it doesn't happen, everyone gets their money back.
+Hearth is a way back to that. Someone on the street starts a campaign: a street party, a bouncy castle for the kids, a pothole that needs fixing. Neighbours chip in, the money waits in a smart contract, and a local business or neighbour gets paid once the organiser confirms the job is done. If it doesn't happen, everyone gets their money back.
 
-It matters most where trust is lowest. Say you've just arrived in a new country. You don't know anyone, and you might not have a local bank account yet. With [Name], you can chip in to your street's party the week you arrive, and nobody has to trust anybody. The money waits in the contract until the job is done. No bank account needed, no middleman holding it. Just neighbours.
+It matters most where trust is lowest. Say you've just arrived in a new country. You don't know anyone, and you might not have a local bank account yet. With Hearth, you can chip in to your street's party the week you arrive, and nobody has to trust anybody. The money waits in the contract until the job is done. No bank account needed, no middleman holding it. Just neighbours.
 
 ## Who it's for
 
