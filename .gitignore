@@ -34,3 +34,6 @@ CLAUDE.local.md
 app/node_modules/
 app/.next/
 app/.env.local
+
+# Private session logs, never commit
+close-outs/

@@ -15,10 +15,18 @@ const TYPES: { value: CampaignType; label: string; hint: string }[] = [
   { value: "job", label: "Local job", hint: "lawn, odd jobs" },
 ];
 
-// Demo-length windows so the whole loop can run in minutes, not days.
-const FUNDING_MINUTES = 60;
-const COMPLETION_MINUTES = 180;
-const REVIEW_MINUTES = 60;
+// How long a campaign raises, how long after that the job must be done, and how
+// long the organiser has to review the proof. The quick option runs the whole
+// loop in minutes for testing and the demo video.
+const MIN = 60;
+const HOUR = 60 * MIN;
+const DAY = 24 * HOUR;
+const TIMINGS = [
+  { label: "Quick test", hint: "raises for 15 min", funding: 15 * MIN, job: 2 * HOUR, review: 30 * MIN },
+  { label: "1 day", hint: "job within 3 days", funding: DAY, job: 3 * DAY, review: DAY },
+  { label: "3 days", hint: "job within a week", funding: 3 * DAY, job: 7 * DAY, review: 2 * DAY },
+  { label: "1 week", hint: "job within 2 weeks", funding: 7 * DAY, job: 14 * DAY, review: 2 * DAY },
+];
 const FEE_BPS = 300; // 3%
 
 export default function CreatePage() {
@@ -31,6 +39,7 @@ export default function CreatePage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [goal, setGoal] = useState(150);
+  const [timing, setTiming] = useState(1); // 1 day by default
   const [payee, setPayee] = useState("");
   const [image, setImage] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -72,9 +81,9 @@ export default function CreatePage() {
       await actions.createCampaign({
         metadataURI,
         goal,
-        fundingDeadline: now + FUNDING_MINUTES * 60,
-        completionDeadline: now + COMPLETION_MINUTES * 60,
-        reviewWindow: REVIEW_MINUTES * 60,
+        fundingDeadline: now + TIMINGS[timing].funding,
+        completionDeadline: now + TIMINGS[timing].funding + TIMINGS[timing].job,
+        reviewWindow: TIMINGS[timing].review,
         feeBps: FEE_BPS,
         payee: payee as `0x${string}`,
       });
@@ -158,6 +167,32 @@ export default function CreatePage() {
               />
             </Field>
 
+            <div>
+              <Label>How long to raise?</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {TIMINGS.map((t, i) => (
+                  <button
+                    key={t.label}
+                    onClick={() => setTiming(i)}
+                    className="rounded-[10px] border p-3 text-left transition-colors"
+                    style={{
+                      borderColor:
+                        timing === i ? "var(--color-ember)" : "var(--color-line)",
+                      background:
+                        timing === i
+                          ? "oklch(0.379 0.155 29.4 / 0.06)"
+                          : "transparent",
+                    }}
+                  >
+                    <div className="text-sm font-semibold">{t.label}</div>
+                    <div className="text-xs text-[color:var(--color-ink-soft)]">
+                      {t.hint}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <Field label="Who's doing it? (paste their Hearth ID: they tap Copy my ID)">
               <input
                 value={payee}
@@ -215,8 +250,7 @@ export default function CreatePage() {
                 : "Start the campaign"}
             </button>
             <p className="text-center text-xs text-[color:var(--color-ink-soft)]">
-              Demo timings: raises for {FUNDING_MINUTES} min, {REVIEW_MINUTES}-min
-              review, 3% pull-out fee.
+              Pull out before the goal is reached and 3% stays in the pot for the street.
             </p>
           </div>
         )}
