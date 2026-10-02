@@ -6,6 +6,7 @@ import { useWallet } from "@crossmint/client-sdk-react-ui";
 import { Header } from "@/components/Header";
 import { useCampaignActions } from "@/lib/useCampaignActions";
 import { getCampaign, Status, type Campaign } from "@/lib/campaigns";
+import { uploadPhoto } from "@/lib/uploadPhoto";
 
 export default function ProofPage({
   params,
@@ -35,14 +36,9 @@ export default function ProofPage({
     setUploading(true);
     setErr(null);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch("/api/upload", { method: "POST", body: fd });
-      const json = await res.json();
-      if (json.url) setImage(json.url);
-      else setErr(json.error ?? "Upload failed");
-    } catch {
-      setErr("Upload failed");
+      setImage(await uploadPhoto(file));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Upload failed");
     } finally {
       setUploading(false);
     }

@@ -1,43 +1,51 @@
 import { NextRequest, NextResponse } from "next/server";
+import { put } from "@vercel/blob";
 
 /**
- * Image upload. Uses Vercel Blob when BLOB_READ_WRITE_TOKEN is set (free tier,
- * on Vercel), otherwise falls back to a base64 data URI so the app works with
- * zero external services locally and in the demo. Data URIs are fine for small
- * photos; Blob is preferred in production for size.
+ * Image upload to Vercel Blob (free tier). Only the returned URL goes on-chain.
+ *
+ * There is deliberately no fallback that embeds the image itself in a data URI:
+ * the contract stores the URI as a string, so an embedded photo would be written
+ * into contract storage, costing millions of gas or failing outright.
  */
 export const runtime = "nodejs";
 
+const MAX_BYTES = 4 * 1024 * 1024;
+
 export async function POST(req: NextRequest) {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    return NextResponse.json(
+      { error: "Photo upload isn't set up yet (BLOB_READ_WRITE_TOKEN missing)." },
+      { status: 503 },
+    );
+  }
+
   const form = await req.formData();
   const file = form.get("file");
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "No file" }, { status: 400 });
   }
-
-  const bytes = Buffer.from(await file.arrayBuffer());
-  const tooBig = bytes.byteLength > 4 * 1024 * 1024; // keep data-URI fallback small
-
-  if (process.env.BLOB_READ_WRITE_TOKEN) {
-    try {
-      const { put } = await import("@vercel/blob");
-      const blob = await put(`hearth/${Date.now()}-${file.name}`, bytes, {
-        access: "public",
-        contentType: file.type,
-      });
-      return NextResponse.json({ url: blob.url });
-    } catch (e) {
-      // fall through to data URI
-      console.error("blob upload failed, using data uri", e);
-    }
+  if (!file.type.startsWith("image/")) {
+    return NextResponse.json({ error: "That isn't a photo." }, { status: 415 });
   }
-
-  if (tooBig) {
+  if (file.size > MAX_BYTES) {
     return NextResponse.json(
-      { error: "Image too large. Keep it under 4MB." },
+      { error: "Photo too large. Keep it under 4MB." },
       { status: 413 },
     );
   }
-  const dataUri = `data:${file.type};base64,${bytes.toString("base64")}`;
-  return NextResponse.json({ url: dataUri });
+
+  try {
+    const blob = await put(`hearth/${Date.now()}-${file.name}`, file, {
+      access: "public",
+      contentType: file.type,
+    });
+    return NextResponse.json({ url: blob.url });
+  } catch (e) {
+    console.error("blob upload failed", e);
+    return NextResponse.json(
+      { error: "Upload failed. Try again." },
+      { status: 502 },
+    );
+  }
 }

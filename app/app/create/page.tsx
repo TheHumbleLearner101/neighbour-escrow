@@ -7,6 +7,7 @@ import { Header } from "@/components/Header";
 import { useCampaignActions } from "@/lib/useCampaignActions";
 import { getCampaignCount, type CampaignType } from "@/lib/campaigns";
 import { isAddress } from "viem";
+import { uploadPhoto } from "@/lib/uploadPhoto";
 
 const TYPES: { value: CampaignType; label: string; hint: string }[] = [
   { value: "event", label: "Street event", hint: "party, fair, clean-up" },
@@ -42,14 +43,9 @@ export default function CreatePage() {
     setUploading(true);
     setFormError(null);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch("/api/upload", { method: "POST", body: fd });
-      const json = await res.json();
-      if (json.url) setImage(json.url);
-      else setFormError(json.error ?? "Upload failed");
-    } catch {
-      setFormError("Upload failed");
+      setImage(await uploadPhoto(file));
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : "Upload failed");
     } finally {
       setUploading(false);
     }
@@ -59,7 +55,7 @@ export default function CreatePage() {
     setFormError(null);
     if (!title.trim()) return setFormError("Give it a name.");
     if (!payee.trim() || !isAddress(payee))
-      return setFormError("Add the provider's wallet address.");
+      return setFormError("Paste the provider's Hearth ID.");
     if (wallet && payee.toLowerCase() === wallet.address.toLowerCase())
       return setFormError("The provider can't be you.");
     if (goal <= 0) return setFormError("Set a goal above zero.");
@@ -162,7 +158,7 @@ export default function CreatePage() {
               />
             </Field>
 
-            <Field label="Who's doing it? (provider's wallet address)">
+            <Field label="Who's doing it? (paste their Hearth ID: they tap Copy my ID)">
               <input
                 value={payee}
                 onChange={(e) => setPayee(e.target.value)}
