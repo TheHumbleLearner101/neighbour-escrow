@@ -45,8 +45,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ url: blob.url });
   } catch (e) {
     console.error("blob upload failed", e);
+    // Blob errors describe the store setup (never a secret), which is what's needed to fix it.
+    const detail = e instanceof Error ? e.message : String(e);
     return NextResponse.json(
-      { error: "Upload failed. Try again." },
+      { error: "Upload failed. Try again.", detail },
       { status: 502 },
     );
   }
