@@ -1,4 +1,11 @@
-import { createPublicClient, http, getAddress, type Address } from "viem";
+import {
+  createPublicClient,
+  http,
+  getAddress,
+  decodeEventLog,
+  type Address,
+  type Hex,
+} from "viem";
 import { baseSepolia } from "viem/chains";
 
 export const CAMPAIGNS_ADDRESS = getAddress(
@@ -7,6 +14,10 @@ export const CAMPAIGNS_ADDRESS = getAddress(
 export const USDC_ADDRESS = getAddress(process.env.NEXT_PUBLIC_USDC_ADDRESS!);
 export const EXPLORER =
   process.env.NEXT_PUBLIC_EXPLORER ?? "https://sepolia.basescan.org";
+/** Blockscout API, used to read the campaign's event history. The public RPC refuses wide log ranges. */
+export const BLOCKSCOUT_API =
+  process.env.NEXT_PUBLIC_BLOCKSCOUT_API ??
+  "https://base-sepolia.blockscout.com/api/v2";
 
 export const publicClient = createPublicClient({
   chain: baseSepolia,
@@ -78,6 +89,16 @@ export const CAMPAIGNS_ABI = [
     ],
     outputs: [{ type: "uint256" }],
   },
+  {
+    type: "function",
+    name: "refundClaimed",
+    stateMutability: "view",
+    inputs: [
+      { name: "id", type: "uint256" },
+      { name: "backer", type: "address" },
+    ],
+    outputs: [{ type: "bool" }],
+  },
   // --- writes (encoded client-side, signed by the user's wallet) ---
   {
     type: "function",
@@ -141,6 +162,74 @@ export const CAMPAIGNS_ABI = [
     stateMutability: "nonpayable",
     inputs: [{ name: "id", type: "uint256" }],
     outputs: [],
+  },
+  {
+    type: "function",
+    name: "cancel",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "id", type: "uint256" }],
+    outputs: [],
+  },
+  // --- anyone can call these once a deadline has passed; each moves the campaign to Refunding ---
+  {
+    type: "function",
+    name: "startRefundOnMissedGoal",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "id", type: "uint256" }],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "expire",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "id", type: "uint256" }],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "finalizeAfterReview",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "id", type: "uint256" }],
+    outputs: [],
+  },
+  // --- events, decoded from Blockscout logs for the backer list and transaction links ---
+  {
+    type: "event",
+    name: "Contributed",
+    inputs: [
+      { name: "id", type: "uint256", indexed: true },
+      { name: "backer", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+      { name: "raised", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "Withdrawn",
+    inputs: [
+      { name: "id", type: "uint256", indexed: true },
+      { name: "backer", type: "address", indexed: true },
+      { name: "refundToBacker", type: "uint256", indexed: false },
+      { name: "fee", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "Paid",
+    inputs: [
+      { name: "id", type: "uint256", indexed: true },
+      { name: "payee", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "Refunded",
+    inputs: [
+      { name: "id", type: "uint256", indexed: true },
+      { name: "backer", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+    ],
   },
 ] as const;
 
@@ -229,13 +318,40 @@ export function formatUsdc(units: bigint): string {
   });
 }
 
+function nowSeconds(): bigint {
+  return BigInt(Math.floor(Date.now() / 1000));
+}
+
+/**
+ * The contract only moves to Refunding when someone calls it after a deadline.
+ * This returns which call opens refunds right now, or null if none is due.
+ */
+export type OpenRefundCall =
+  | "startRefundOnMissedGoal"
+  | "expire"
+  | "finalizeAfterReview";
+
+export function refundCallDue(raw: RawCampaign): OpenRefundCall | null {
+  const now = nowSeconds();
+  if (raw.status === Status.Funding && now > raw.fundingDeadline)
+    return "startRefundOnMissedGoal";
+  if (raw.status === Status.Funded && now > raw.completionDeadline)
+    return "expire";
+  if (
+    raw.status === Status.ProofSubmitted &&
+    now > raw.proofAt + raw.reviewWindow
+  )
+    return "finalizeAfterReview";
+  return null;
+}
+
 /** Derive the plain-English money state from on-chain status and the clock. */
 export function deriveMoneyState(raw: RawCampaign): MoneyState {
-  const now = BigInt(Math.floor(Date.now() / 1000));
+  // A missed deadline reads as "money back" even before anyone opens refunds.
+  if (refundCallDue(raw)) return "refunded";
   switch (raw.status) {
     case Status.Funding:
-      // Deadline passed with goal unmet reads as "money back" (refund opens lazily).
-      return now > raw.fundingDeadline ? "refunded" : "raising";
+      return "raising";
     case Status.Funded:
       return "booked";
     case Status.ProofSubmitted:
@@ -300,5 +416,103 @@ export async function getAllCampaigns(): Promise<Campaign[]> {
   const count = await getCampaignCount();
   const ids = Array.from({ length: count }, (_, i) => i);
   const results = await Promise.all(ids.map((id) => getCampaign(id)));
-  return results.filter((c): c is Campaign => c !== null).reverse(); // newest first
+  // Campaigns without readable metadata (early command-line test runs) are left off the feed.
+  return results
+    .filter((c): c is Campaign => c !== null && c.meta !== null)
+    .reverse(); // newest first
+}
+
+// --- History: who chipped in, and the transactions that paid or refunded ---
+
+export interface Backer {
+  address: Address;
+  amount: bigint; // what they still have in, after any pull-out
+}
+
+export interface CampaignHistory {
+  backers: Backer[];
+  paidTx: Hex | null;
+  refunds: { backer: Address; amount: bigint; tx: Hex }[];
+}
+
+interface BlockscoutLog {
+  topics: (Hex | null)[];
+  data: Hex;
+  transaction_hash: Hex;
+}
+
+/** All logs the contract has emitted, oldest first, via Blockscout (paged). */
+async function fetchContractLogs(): Promise<BlockscoutLog[]> {
+  const logs: BlockscoutLog[] = [];
+  let params = "";
+  for (let page = 0; page < 20; page++) {
+    const res = await fetch(
+      `${BLOCKSCOUT_API}/addresses/${CAMPAIGNS_ADDRESS}/logs${params}`,
+    );
+    if (!res.ok) break;
+    const json = (await res.json()) as {
+      items: BlockscoutLog[];
+      next_page_params: Record<string, string | number> | null;
+    };
+    logs.push(...json.items);
+    if (!json.next_page_params) break;
+    params =
+      "?" +
+      new URLSearchParams(
+        Object.entries(json.next_page_params).map(([k, v]) => [k, String(v)]),
+      ).toString();
+  }
+  return logs.reverse(); // Blockscout returns newest first
+}
+
+export async function getCampaignHistory(id: number): Promise<CampaignHistory> {
+  const history: CampaignHistory = { backers: [], paidTx: null, refunds: [] };
+  const held = new Map<Address, bigint>();
+
+  let logs: BlockscoutLog[];
+  try {
+    logs = await fetchContractLogs();
+  } catch {
+    return history; // history is a nice-to-have; the page works without it
+  }
+
+  for (const log of logs) {
+    const topics = log.topics.filter((t): t is Hex => t !== null);
+    if (topics.length === 0) continue;
+    let ev;
+    try {
+      ev = decodeEventLog({
+        abi: CAMPAIGNS_ABI,
+        data: log.data,
+        topics: topics as [Hex, ...Hex[]],
+      });
+    } catch {
+      continue; // an event this page doesn't use
+    }
+    const args = ev.args as { id?: bigint } & Record<string, unknown>;
+    if (args.id !== BigInt(id)) continue;
+
+    if (ev.eventName === "Contributed") {
+      const a = args as unknown as { backer: Address; amount: bigint };
+      held.set(a.backer, (held.get(a.backer) ?? BigInt(0)) + a.amount);
+    } else if (ev.eventName === "Withdrawn") {
+      const a = args as unknown as { backer: Address };
+      held.delete(a.backer);
+    } else if (ev.eventName === "Paid") {
+      history.paidTx = log.transaction_hash;
+    } else if (ev.eventName === "Refunded") {
+      const a = args as unknown as { backer: Address; amount: bigint };
+      history.refunds.push({
+        backer: a.backer,
+        amount: a.amount,
+        tx: log.transaction_hash,
+      });
+    }
+  }
+
+  history.backers = [...held.entries()].map(([address, amount]) => ({
+    address,
+    amount,
+  }));
+  return history;
 }

@@ -9,9 +9,11 @@ import {
   formatUsdc,
   toUsdc,
   publicClient,
+  refundCallDue,
   CAMPAIGNS_ADDRESS,
   CAMPAIGNS_ABI,
   type Campaign,
+  type CampaignHistory,
 } from "@/lib/campaigns";
 import { getAddress } from "viem";
 
@@ -19,12 +21,14 @@ const PRESETS = [5, 10, 25];
 
 export function ChipInPanel({
   campaign,
+  history,
   isCreator,
   isPayee,
   loggedIn,
   onDone,
 }: {
   campaign: Campaign;
+  history: CampaignHistory | null;
   isCreator: boolean;
   isPayee: boolean;
   loggedIn: boolean;
@@ -37,21 +41,34 @@ export function ChipInPanel({
   const remaining = Math.max(0, toUsdc(raw.goal) - toUsdc(raw.raised));
   const [amount, setAmount] = useState(Math.min(10, remaining || 10));
   const [myContribution, setMyContribution] = useState<number>(0);
+  const [myRefundClaimed, setMyRefundClaimed] = useState(false);
 
-  // Read the signed-in wallet's own contribution to this campaign.
+  // Read the signed-in wallet's own contribution, and whether it has already had its money back.
   useEffect(() => {
     let live = true;
     const me = wallet?.address;
     (async () => {
       if (!me || !loggedIn) return;
       try {
-        const c = (await publicClient.readContract({
-          address: CAMPAIGNS_ADDRESS,
-          abi: CAMPAIGNS_ABI,
-          functionName: "contributionOf",
-          args: [BigInt(campaign.id), getAddress(me)],
-        })) as bigint;
-        if (live) setMyContribution(toUsdc(c));
+        const args = [BigInt(campaign.id), getAddress(me)] as const;
+        const [c, claimed] = await Promise.all([
+          publicClient.readContract({
+            address: CAMPAIGNS_ADDRESS,
+            abi: CAMPAIGNS_ABI,
+            functionName: "contributionOf",
+            args,
+          }) as Promise<bigint>,
+          publicClient.readContract({
+            address: CAMPAIGNS_ADDRESS,
+            abi: CAMPAIGNS_ABI,
+            functionName: "refundClaimed",
+            args,
+          }) as Promise<boolean>,
+        ]);
+        if (live) {
+          setMyContribution(toUsdc(c));
+          setMyRefundClaimed(claimed);
+        }
       } catch {
         /* ignore */
       }
@@ -59,9 +76,10 @@ export function ChipInPanel({
     return () => {
       live = false;
     };
-  }, [wallet?.address, loggedIn, campaign.id]);
+  }, [wallet?.address, loggedIn, campaign.id, raw.status, raw.raised]);
 
   const busy = actions.state === "signing" || actions.state === "confirming";
+  const openFirst = refundCallDue(raw);
 
   async function handle(fn: () => Promise<string>) {
     try {
@@ -71,6 +89,23 @@ export function ChipInPanel({
     } catch {
       /* error surfaced by actions.error */
     }
+  }
+
+  // --- Paid: open to everyone, logged in or not ---
+  if (raw.status === Status.Paid) {
+    return (
+      <Panel>
+        <div className="text-center">
+          <div className="font-display text-2xl text-[color:var(--color-paid)]">
+            Paid. The job got done.
+          </div>
+          <p className="mt-1 text-sm text-[color:var(--color-ink-soft)]">
+            ${formatUsdc(raw.raised + raw.retainedFees)} went to the provider.
+          </p>
+          {history?.paidTx && <TxLink hash={history.paidTx}>See the payment</TxLink>}
+        </div>
+      </Panel>
+    );
   }
 
   // --- Not logged in ---
@@ -93,14 +128,7 @@ export function ChipInPanel({
             Done.
           </div>
           {actions.lastTx && (
-            <a
-              href={`${EXPLORER}/tx/${actions.lastTx}`}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-1 block text-sm underline text-[color:var(--color-ink-soft)]"
-            >
-              See it on the explorer
-            </a>
+            <TxLink hash={actions.lastTx}>See it on the explorer</TxLink>
           )}
           <button
             onClick={() => {
@@ -115,6 +143,66 @@ export function ChipInPanel({
       </Panel>
     );
   }
+
+  // --- Money back: refunds are open, or a deadline has passed and they're due ---
+  if (raw.status === Status.Refunding || openFirst) {
+    const hasShare = myContribution > 0 && !myRefundClaimed;
+    const myRefund = history?.refunds.find(
+      (r) => r.backer.toLowerCase() === wallet?.address?.toLowerCase(),
+    );
+    return (
+      <Panel>
+        <p className="mb-3 text-center text-sm text-[color:var(--color-ink-soft)]">
+          {reasonText(raw.status, openFirst)} Everyone gets their money back.
+        </p>
+        {hasShare ? (
+          <button
+            disabled={busy}
+            onClick={() =>
+              handle(() => actions.claimRefund(campaign.id, openFirst, true))
+            }
+            className="btn-primary w-full"
+          >
+            {busy ? "Sending…" : `Get my $${myContribution.toFixed(2)} back`}
+          </button>
+        ) : myRefundClaimed ? (
+          <div className="text-center text-sm text-[color:var(--color-ink-soft)]">
+            You&apos;ve had your money back.
+            {myRefund && <TxLink hash={myRefund.tx}>See the refund</TxLink>}
+          </div>
+        ) : openFirst ? (
+          // Nothing of mine in it, but anyone can open refunds for the street.
+          <button
+            disabled={busy}
+            onClick={() =>
+              handle(() => actions.claimRefund(campaign.id, openFirst, false))
+            }
+            className="btn-ghost w-full text-sm"
+          >
+            {busy ? "Opening…" : "Open refunds for everyone"}
+          </button>
+        ) : (
+          <p className="text-center text-sm text-[color:var(--color-ink-soft)]">
+            You didn&apos;t chip into this one.
+          </p>
+        )}
+        {actions.error && <ErrorNote msg={actions.error} />}
+      </Panel>
+    );
+  }
+
+  const cancelButton = isCreator && (
+    <button
+      disabled={busy}
+      onClick={() => {
+        if (window.confirm("Call it off? Everyone will get their money back."))
+          handle(() => actions.cancelCampaign(campaign.id));
+      }}
+      className="btn-ghost mt-2 w-full text-sm"
+    >
+      Call it off and refund everyone
+    </button>
+  );
 
   // --- Raising: chip in, and pull out if you already chipped in ---
   if (raw.status === Status.Funding) {
@@ -177,6 +265,7 @@ export function ChipInPanel({
             Pull out my ${myContribution.toFixed(2)} (3% fee stays for the street)
           </button>
         )}
+        {cancelButton}
 
         {actions.error && <ErrorNote msg={actions.error} />}
       </Panel>
@@ -204,6 +293,8 @@ export function ChipInPanel({
           The booking is on and the money is locked in. Waiting for the provider
           to do the job and post proof.
         </p>
+        {cancelButton}
+        {actions.error && <ErrorNote msg={actions.error} />}
       </Panel>
     );
   }
@@ -237,7 +328,7 @@ export function ChipInPanel({
             onClick={() => handle(() => actions.rejectJob(campaign.id))}
             className="btn-ghost mt-2 w-full text-sm"
           >
-            Something's wrong, refund everyone
+            Something&apos;s wrong, refund everyone
           </button>
           {actions.error && <ErrorNote msg={actions.error} />}
         </Panel>
@@ -254,56 +345,40 @@ export function ChipInPanel({
           />
         )}
         <p className="text-center text-sm text-[color:var(--color-ink-soft)]">
-          The provider has posted proof. Waiting on{" "}
-          {isCreator ? "you" : "the organiser"} to give the go-ahead.
+          The provider has posted proof. Waiting on the organiser to give the
+          go-ahead.
         </p>
-      </Panel>
-    );
-  }
-
-  // --- Paid ---
-  if (raw.status === Status.Paid) {
-    return (
-      <Panel>
-        <div className="text-center">
-          <div className="font-display text-2xl text-[color:var(--color-paid)]">
-            Paid. The job got done.
-          </div>
-          <p className="mt-1 text-sm text-[color:var(--color-ink-soft)]">
-            {formatUsdc(raw.pot > 0n ? raw.pot : raw.raised)} went to the
-            provider.
-          </p>
-        </div>
-      </Panel>
-    );
-  }
-
-  // --- Refunding: claim your money back ---
-  if (raw.status === Status.Refunding) {
-    return (
-      <Panel>
-        <p className="mb-3 text-center text-sm text-[color:var(--color-ink-soft)]">
-          This one didn&apos;t go ahead. Everyone gets their money back.
-        </p>
-        {myContribution > 0 ? (
-          <button
-            disabled={busy}
-            onClick={() => handle(() => actions.claimRefund(campaign.id))}
-            className="btn-primary w-full"
-          >
-            {busy ? "Sending…" : `Get my $${myContribution.toFixed(2)} back`}
-          </button>
-        ) : (
-          <p className="text-center text-sm text-[color:var(--color-ink-soft)]">
-            You didn&apos;t chip into this one.
-          </p>
-        )}
-        {actions.error && <ErrorNote msg={actions.error} />}
       </Panel>
     );
   }
 
   return null;
+}
+
+/** Plain-English reason the money is going back. */
+function reasonText(
+  status: number,
+  openFirst: ReturnType<typeof refundCallDue>,
+): string {
+  if (openFirst === "startRefundOnMissedGoal")
+    return "The goal wasn't reached in time.";
+  if (openFirst === "expire") return "The job wasn't done in time.";
+  if (openFirst === "finalizeAfterReview")
+    return "Nobody gave the go-ahead in time.";
+  return status === Status.Refunding ? "This one didn't go ahead." : "";
+}
+
+function TxLink({ hash, children }: { hash: string; children: React.ReactNode }) {
+  return (
+    <a
+      href={`${EXPLORER}/tx/${hash}`}
+      target="_blank"
+      rel="noreferrer"
+      className="mt-1 block text-sm underline text-[color:var(--color-ink-soft)]"
+    >
+      {children}
+    </a>
+  );
 }
 
 function Panel({ children }: { children: React.ReactNode }) {

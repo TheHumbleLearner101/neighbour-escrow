@@ -8,6 +8,7 @@ import {
   CAMPAIGNS_ABI,
   ERC20_ABI,
   fromUsdc,
+  type OpenRefundCall,
 } from "./campaigns";
 
 type ActionState = "idle" | "signing" | "confirming" | "done" | "error";
@@ -130,13 +131,46 @@ export function useCampaignActions() {
     [run, evm],
   );
 
+  /**
+   * Money back. If a deadline has passed but nobody has opened refunds yet,
+   * open them first (anyone can), then claim this wallet's share if it has one.
+   */
   const claimRefund = useCallback(
+    (id: number, openFirst: OpenRefundCall | null, hasShare: boolean) =>
+      run(async () => {
+        const w = evm();
+        let hash = "";
+        if (openFirst) {
+          const opened = await w.sendTransaction({
+            to: CAMPAIGNS_ADDRESS,
+            abi: CAMPAIGNS_ABI,
+            functionName: openFirst,
+            args: [BigInt(id)],
+          });
+          hash = opened.hash;
+          setState("confirming");
+        }
+        if (hasShare) {
+          const tx = await w.sendTransaction({
+            to: CAMPAIGNS_ADDRESS,
+            abi: CAMPAIGNS_ABI,
+            functionName: "claimRefund",
+            args: [BigInt(id)],
+          });
+          hash = tx.hash;
+        }
+        return hash;
+      }),
+    [run, evm],
+  );
+
+  const cancelCampaign = useCallback(
     (id: number) =>
       run(async () => {
         const tx = await evm().sendTransaction({
           to: CAMPAIGNS_ADDRESS,
           abi: CAMPAIGNS_ABI,
-          functionName: "claimRefund",
+          functionName: "cancel",
           args: [BigInt(id)],
         });
         return tx.hash;
@@ -192,6 +226,7 @@ export function useCampaignActions() {
     confirmJob,
     rejectJob,
     claimRefund,
+    cancelCampaign,
     createCampaign,
   };
 }
