@@ -24,3 +24,12 @@ pnpm dev
 ## Deploying on Vercel
 
 Import the repo with **Root Directory** set to `app`, add the variables from `.env.example`, and connect a Blob store to the project (this sets `BLOB_STORE_ID`).
+
+## Giving testers test money
+
+New accounts start empty. `scripts/give-test-money.mts` sends test USDC from the project's own test wallets (Base Sepolia only, at most $10 per send). It reads the Crossmint server key and signer secret from the repo-root `.env`.
+
+```bash
+node --experimental-transform-types scripts/give-test-money.mts balances
+node --experimental-transform-types scripts/give-test-money.mts give <hearth-id> 5 "Sam"
+```
