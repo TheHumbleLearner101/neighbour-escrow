@@ -19,6 +19,7 @@ pnpm dev
 - `components/ChipInPanel.tsx`: the actions for each money state and role
 - `lib/campaigns.ts`: contract reads, plain-English money states, history from Blockscout
 - `lib/useCampaignActions.ts`: wallet writes, signed by the user's own email wallet
+- `components/GetTestMoney.tsx` and `app/api/gift/route.ts`: the "Get $5 to try Hearth" button and the server send behind it
 - `lib/uploadPhoto.ts` and `app/api/upload/route.ts`: shrink a photo in the browser, store it on Vercel Blob
 
 ## Deploying on Vercel
@@ -27,7 +28,12 @@ Import the repo with **Root Directory** set to `app`, add the variables from `.e
 
 ## Giving testers test money
 
-New accounts start empty. `scripts/give-test-money.mts` sends test USDC from the project's own test wallets (Base Sepolia only, at most $10 per send). It reads the Crossmint server key and signer secret from the repo-root `.env`.
+New accounts start empty. Two ways to fill one, both paying from the project's own test wallets (Base Sepolia only):
+
+- **In the app.** A signed-in user with an empty account sees "Get $5 to try Hearth", enters the code word, and gets $5. One gift per account, checked against the chain's transfer history, so it survives redeploys. Route: `app/api/gift/route.ts`. Needs three server-only settings on Vercel: `CROSSMINT_SERVER_SIDE_API_KEY`, `CROSSMINT_SIGNER_SECRET` and `HEARTH_GIFT_CODE` (see `.env.example`), then a redeploy.
+- **From the command line.** `scripts/give-test-money.mts` sends any amount up to $10 and logs it to `close-outs/test-money-given.md`. It reads the Crossmint server key and signer secret from the repo-root `.env`.
+
+Both share `lib/server/testMoney.ts`, which holds the wallet list and the send.
 
 ```bash
 node --experimental-transform-types scripts/give-test-money.mts balances

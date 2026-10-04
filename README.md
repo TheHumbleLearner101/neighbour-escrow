@@ -53,7 +53,7 @@ forge test
 
 ## The app
 
-Email-login smart wallets come from Crossmint, and Crossmint sponsors gas, so users never hold ETH. Campaign text lives in a small JSON metadata URI; photos are hosted on Vercel Blob and only their URL goes on-chain. Campaign history (backers, payment and refund transactions) is read from the Blockscout API.
+Email-login smart wallets come from Crossmint, and Crossmint sponsors gas, so users never hold ETH. Campaign text lives in a small JSON metadata URI; photos are hosted on Vercel Blob and only their URL goes on-chain. Campaign history (backers, payment and refund transactions) is read from the Blockscout API. Testers with an empty account can tap "Get $5 to try Hearth" and enter a code word; the test USDC comes from the project's own wallets, one gift per account.
 
 ```bash
 cd app
