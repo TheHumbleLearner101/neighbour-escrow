@@ -6,6 +6,7 @@ import { useCrossmintAuth } from "@crossmint/client-sdk-react-ui";
 import { Header } from "@/components/Header";
 import { CampaignCard } from "@/components/CampaignCard";
 import { Flame } from "@/components/Flame";
+import { GetTestMoney } from "@/components/GetTestMoney";
 import { getAllCampaigns, type Campaign } from "@/lib/campaigns";
 
 export default function StreetFeed() {
@@ -56,6 +57,7 @@ export default function StreetFeed() {
             Join your street
           </button>
         )}
+        <GetTestMoney />
       </section>
 
       {/* The feed */}

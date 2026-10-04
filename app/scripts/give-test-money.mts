@@ -6,40 +6,38 @@
  *
  * Sends from whichever of the three project test wallets holds the most, signed by
  * the Crossmint server signer (gas sponsored by Crossmint). Keys come from the
- * repo-root .env, which is never committed.
+ * repo-root .env, which is never committed. The in-app "Get $5 to try Hearth"
+ * button does the same through app/api/gift; both use lib/server/testMoney.ts.
+ * The wallet list lives there too (GIFT_WALLETS).
  */
 import { fileURLToPath } from "node:url";
 import { appendFileSync, mkdirSync } from "node:fs";
-import { createCrossmint, CrossmintWallets } from "@crossmint/wallets-sdk";
-import { createPublicClient, http, parseAbi, isAddress, getAddress } from "viem";
-import { baseSepolia } from "viem/chains";
+import { isAddress, getAddress } from "viem";
+import {
+  makeRpc,
+  usdcBalance,
+  giftBalances,
+  pickSender,
+  sendGift,
+} from "../lib/server/testMoney.ts";
 
 process.loadEnvFile(fileURLToPath(new URL("../../.env", import.meta.url)));
 
-const CHAIN = "base-sepolia";
 const MAX_GIFT = 10; // dollars per send, so a typo can't empty a wallet
 const USDC = getAddress(process.env.USDC_ADDRESS ?? "");
 const CAMPAIGNS = getAddress(process.env.CAMPAIGNS_CONTRACT_ADDRESS ?? "");
-const WALLETS: Record<string, `0x${string}`> = {
-  "Backer A": "0x1B3a8CfEc12Aa3bac017528C3D10cd6daF2EFd21",
-  "Backer B": "0xb93a68E71A6B609Bb2DD550faFF903dcdd3935aD",
-  Provider: "0x473E0B6fC24c068d6e4dE538B298316Edf77a9D4",
-};
 
 const apiKey = process.env.CROSSMINT_SERVER_SIDE_API_KEY ?? "";
 const secret = process.env.CROSSMINT_SIGNER_SECRET ?? "";
 if (!apiKey.startsWith("sk_staging_")) throw new Error("Refusing: needs a staging server key (sk_staging_...).");
 if (!secret) throw new Error("CROSSMINT_SIGNER_SECRET missing from .env");
 
-const rpc = createPublicClient({ chain: baseSepolia, transport: http(process.env.BASE_SEPOLIA_RPC_URL) });
-const erc20 = parseAbi(["function balanceOf(address) view returns (uint256)"]);
-const balanceOf = async (a: `0x${string}`) =>
-  Number(await rpc.readContract({ address: USDC, abi: erc20, functionName: "balanceOf", args: [a] })) / 1e6;
+const rpc = makeRpc(process.env.BASE_SEPOLIA_RPC_URL);
 
 async function balances() {
-  const rows = await Promise.all(Object.entries(WALLETS).map(async ([n, a]) => [n, a, await balanceOf(a)] as const));
-  for (const [n, , b] of rows) console.log(`${n.padEnd(9)} $${b}`);
-  console.log(`total     $${rows.reduce((s, r) => s + r[2], 0)}`);
+  const rows = await giftBalances(rpc, USDC);
+  for (const r of rows) console.log(`${r.name.padEnd(9)} $${r.balance}`);
+  console.log(`total     $${rows.reduce((s, r) => s + r.balance, 0)}`);
   return rows;
 }
 
@@ -50,23 +48,20 @@ async function give(to: string, amountText: string, name: string) {
   const amount = Number(amountText);
   if (!(amount > 0) || amount > MAX_GIFT) throw new Error(`Amount must be above 0 and at most $${MAX_GIFT}.`);
 
-  const rows = await balances();
-  const [fromName, fromAddress, fromBalance] = [...rows].sort((a, b) => b[2] - a[2])[0];
-  if (fromBalance < amount) throw new Error(`No test wallet has $${amount}. Top one up at faucet.circle.com.`);
+  const sender = pickSender(await balances(), recipient, amount);
+  if (!sender) throw new Error(`No test wallet has $${amount}. Top one up at faucet.circle.com.`);
 
-  const before = await balanceOf(recipient);
-  const wallet = await CrossmintWallets.from(createCrossmint({ apiKey })).getWallet(fromAddress, { chain: CHAIN });
-  await wallet.useSigner({ type: "server", secret });
-  const tx = await wallet.send(recipient, "usdc", String(amount));
-  const after = await balanceOf(recipient);
+  const before = await usdcBalance(rpc, USDC, recipient);
+  const hash = await sendGift({ apiKey, secret, from: sender.address, to: recipient, amount });
+  const after = await usdcBalance(rpc, USDC, recipient);
 
-  console.log(`\nSent $${amount} from ${fromName} to ${name || recipient}`);
+  console.log(`\nSent $${amount} from ${sender.name} to ${name || recipient}`);
   console.log(`Their balance: $${before} -> $${after}`);
-  console.log(`https://sepolia.basescan.org/tx/${tx.hash}`);
+  console.log(`https://sepolia.basescan.org/tx/${hash}`);
 
   const log = fileURLToPath(new URL("../../close-outs/", import.meta.url));
   mkdirSync(log, { recursive: true });
-  appendFileSync(`${log}test-money-given.md`, `- ${new Date().toISOString()} | ${name || "-"} | ${recipient} | $${amount} from ${fromName} | ${tx.hash}\n`);
+  appendFileSync(`${log}test-money-given.md`, `- ${new Date().toISOString()} | ${name || "-"} | ${recipient} | $${amount} from ${sender.name} | ${hash}\n`);
 }
 
 const [cmd, ...args] = process.argv.slice(2);

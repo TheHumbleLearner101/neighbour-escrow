@@ -7,6 +7,7 @@ import { Header } from "@/components/Header";
 import { Progress, Countdown } from "@/components/Progress";
 import { MoneyStatePill } from "@/components/MoneyState";
 import { ChipInPanel } from "@/components/ChipInPanel";
+import { GetTestMoney } from "@/components/GetTestMoney";
 import {
   getCampaign,
   getCampaignHistory,
@@ -155,6 +156,9 @@ export default function CampaignPage({
             </p>
           )}
         </div>
+
+        {/* Empty account? Test money first, so the chip-in below can work. */}
+        {raw.status === Status.Funding && <GetTestMoney />}
 
         {/* Actions, state + role aware */}
         <ChipInPanel
